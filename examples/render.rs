@@ -4,21 +4,20 @@ extern crate cgmath;
 extern crate glium;
 
 use assimp::{Importer, LogStream};
-use cgmath::{perspective, Matrix4, Deg, Vector3, Point3};
-use glium::glutin;
-use glium::{DisplayBuild, Surface};
+use cgmath::{perspective, Deg, Matrix4, Point3, Vector3};
+use glium::{glutin, Surface};
 use glium::index::PrimitiveType;
 
 fn main() {
-    let display = glutin::WindowBuilder::new()
-        .with_depth_buffer(24)
-        .build_glium()
-        .unwrap();
+    let mut events_loop = glutin::EventsLoop::new();
+    let window = glutin::WindowBuilder::new();
+    let context = glutin::ContextBuilder::new();
+    let display = glium::Display::new(window, context, &events_loop).unwrap();
 
     #[derive(Copy, Clone, Debug)]
     struct Vertex3 {
         position: [f32; 3],
-        normal: [f32; 3]
+        normal: [f32; 3],
     }
     implement_vertex!(Vertex3, position, normal);
 
@@ -74,12 +73,15 @@ fn main() {
         let scene = importer.read_file("examples/spider.obj").unwrap();
 
         for mesh in scene.mesh_iter() {
-            let verts: Vec<Vertex3> = mesh.vertex_iter().zip(mesh.normal_iter()).map(|(v, n)|
-                Vertex3 {
-                    position: v.into(),
-                    normal: n.into()
-                }
-            ).collect();
+            let verts: Vec<Vertex3> = mesh.vertex_iter()
+                .zip(mesh.normal_iter())
+                .map(|(v, n)| {
+                    Vertex3 {
+                        position: v.into(),
+                        normal: n.into(),
+                    }
+                })
+                .collect();
 
             // Create vertex buffer
             let vb = glium::VertexBuffer::new(&display, &verts);
@@ -103,21 +105,27 @@ fn main() {
     let pos = Point3::new(0.0, 0.0, 0.0);
     let up = Vector3::new(0.0, 1.0, 0.0);
     let persp_matrix: [[f32; 4]; 4] = perspective(Deg(60.0), 1.333, 0.1, 1000.0).into();
-    let view_matrix: [[f32; 4]; 4] = Matrix4::look_at(eye, pos, up).into();;
+    let view_matrix: [[f32; 4]; 4] = Matrix4::look_at(eye, pos, up).into();
 
-    let uniforms = uniform! {
+    let uniforms =
+        uniform! {
         persp_matrix: persp_matrix,
         view_matrix: view_matrix
     };
 
     // Main loop
     loop {
-        for ev in display.poll_events() {
-            match ev {
-                glium::glutin::Event::Closed => return,
-                _ => ()
+        events_loop.poll_events(|event| match event {
+            glutin::Event::WindowEvent { event, .. } => {
+                match event {
+                    glutin::WindowEvent::Closed => {
+                        return;
+                    }
+                    _ => (),
+                }
             }
-        }
+            _ => (),
+        });
 
         let mut target = display.draw();
         target.clear_color_and_depth((0.1, 0.1, 0.1, 1.0), 1.0);
@@ -132,11 +140,15 @@ fn main() {
         };
 
         for i in 0..vertex_buffers.len() {
-            target.draw(&vertex_buffers[i],
-                        &index_buffers[i],
-                        &program,
-                        &uniforms,
-                        &params).unwrap();
+            target
+                .draw(
+                    &vertex_buffers[i],
+                    &index_buffers[i],
+                    &program,
+                    &uniforms,
+                    &params,
+                )
+                .unwrap();
         }
 
         target.finish().unwrap();
